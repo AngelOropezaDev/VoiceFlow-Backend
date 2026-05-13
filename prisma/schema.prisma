@@ -1,0 +1,136 @@
+// ============================================================================
+// Project Syncro — Schema Prisma
+// Stack: NestJS + PostgreSQL (Supabase) + Prisma ORM
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+/// Estado del pipeline de procesamiento de audio
+enum AudioStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Tipo de integración externa ejecutada
+enum IntegrationType {
+  GMAIL
+  NOTION
+}
+
+/// Resultado de la operación de integración
+enum IntegrationStatus {
+  SUCCESS
+  FAILED
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+/// Usuario principal del sistema.
+/// Centraliza auth, créditos, y tokens OAuth para integraciones.
+model User {
+  id       String  @id @default(uuid()) @db.Uuid
+  email    String  @unique
+  password String // hash bcrypt/argon2
+  name     String?
+  credits  Int     @default(10) // créditos iniciales de cortesía
+
+  // --- OAuth Tokens (almacenados como texto cifrado) ---
+  googleAccessToken  String? @db.Text
+  googleRefreshToken String? @db.Text
+  notionAccessToken  String? @db.Text
+
+  // --- Timestamps ---
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Relations ---
+  audios Audio[]
+
+  @@index([email])
+  @@map("users")
+}
+
+/// Registro de audio subido por un usuario.
+/// Almacena la referencia a Cloudflare R2 y el estado del pipeline de IA.
+model Audio {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String      @db.Uuid
+  storageKey String // key del objeto en Cloudflare R2
+  status     AudioStatus @default(PENDING)
+  duration   Float? // duración en segundos
+  fileName   String? // nombre original del archivo
+
+  // --- Timestamps ---
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Relations ---
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiContent       AIContent? // relación 1:1 inversa
+  integrationLogs IntegrationLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status]) // consultas filtradas: "mis audios pendientes"
+  @@index([createdAt])
+  @@map("audios")
+}
+
+/// Contenido generado por IA a partir del procesamiento de un audio.
+/// Relación 1:1 con Audio — se crea al completarse el pipeline.
+model AIContent {
+  id      String @id @default(uuid()) @db.Uuid
+  audioId String @unique @db.Uuid // clave única = relación 1:1
+
+  transcription String @db.Text
+  summary       String @db.Text
+  actionItems   Json // estructura flexible para distintos gestores de tareas
+  draftEmail    String @db.Text
+
+  // --- Timestamps ---
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Relations ---
+  audio Audio @relation(fields: [audioId], references: [id], onDelete: Cascade)
+
+  @@index([audioId])
+  @@map("ai_contents")
+}
+
+/// Log de integraciones ejecutadas (envío a Gmail, creación en Notion, etc.).
+/// Cada registro documenta un intento de sincronización con un servicio externo.
+model IntegrationLog {
+  id      String            @id @default(uuid()) @db.Uuid
+  audioId String            @db.Uuid
+  type    IntegrationType // GMAIL | NOTION
+  status  IntegrationStatus // SUCCESS | FAILED
+
+  externalId String? // ID devuelto por la API externa (messageId de Gmail, pageId de Notion)
+  errorMsg   String? @db.Text // detalle del error si status = FAILED
+
+  // --- Timestamps ---
+  createdAt DateTime @default(now())
+
+  // --- Relations ---
+  audio Audio @relation(fields: [audioId], references: [id], onDelete: Cascade)
+
+  @@index([audioId])
+  @@index([type, status]) // consultas: "todas las integraciones Gmail fallidas"
+  @@map("integration_logs")
+}
