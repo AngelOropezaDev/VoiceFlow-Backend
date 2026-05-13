@@ -5,10 +5,11 @@ import { AudioController } from './audio.controller';
 import { S3Module } from 'src/s3/s3.module';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
+import { AudioMetadataService } from './audio-metadata.service';
 
 @Module({
   imports: [S3Module, PrismaModule, TranscriptionModule],
   controllers: [AudioController],
-  providers: [AudioService, AudioRepository],
+  providers: [AudioService, AudioRepository, AudioMetadataService],
 })
 export class AudioModule { }
