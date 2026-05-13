@@ -3,6 +3,7 @@ import { S3Service } from 'src/s3/s3.service';
 import { v4 as uuidv4 } from 'uuid'
 import { AudioRepository } from './audio.repository';
 import { TranscriptionService } from '../transcription/transcription.service';
+import { AudioMetadataService } from './audio-metadata.service';
 
 @Injectable()
 export class AudioService {
@@ -11,7 +12,8 @@ export class AudioService {
     constructor(
         private s3Service: S3Service, 
         private audioRepo: AudioRepository,
-        private transcriptionService: TranscriptionService
+        private transcriptionService: TranscriptionService,
+        private audioMetadataService: AudioMetadataService
     ) { }
 
     async initUpload(userId: string, fileName: string) {
@@ -43,9 +45,27 @@ export class AudioService {
 
         try {
             await this.audioRepo.updateStatus(audioId, 'PROCESSING');
-            const transcription = await this.transcriptionService.transcribe(audio.storageKey);
-            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription);
-            return { success: true, transcription };
+            
+            const audioBuffer = await this.s3Service.getFileAsBuffer(audio.storageKey);
+            
+            // Get duration and update
+            const ext = audio.storageKey.split('.').pop()?.toLowerCase() || 'webm';
+            const mimeType = ext === 'mp3' ? 'audio/mpeg' : 
+                             ext === 'wav' ? 'audio/wav' : 
+                             ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
+            
+            const duration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
+            if (duration) {
+                await this.audioRepo.updateDuration(audioId, duration);
+            }
+
+            const transcription = await this.transcriptionService.transcribeWithBuffer(audioBuffer, audio.storageKey);
+            
+            // Analyze transcription
+            const analysis = await this.transcriptionService.analyzeTranscription(transcription);
+
+            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis);
+            return { success: true, transcription, duration, analysis };
         } catch (error: any) {
             this.logger.error(`Failed to process audio ${audioId}: ${error.message}`);
             await this.audioRepo.updateStatus(audioId, 'FAILED');

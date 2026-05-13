@@ -21,7 +21,14 @@ export class AudioRepository {
         });
     }
 
-    async updateTranscriptionAndStatus(id: string, transcription: string) {
+    async updateDuration(id: string, duration: number) {
+        return this.prisma.audio.update({
+            where: { id },
+            data: { duration }
+        });
+    }
+
+    async updateTranscriptionAndStatus(id: string, transcription: string, analysis?: { summary: string, actionItems: string[], draftEmail: string }) {
         return this.prisma.audio.update({
             where: { id },
             data: {
@@ -30,12 +37,15 @@ export class AudioRepository {
                     upsert: {
                         create: {
                             transcription,
-                            summary: '',
-                            actionItems: {},
-                            draftEmail: ''
+                            summary: analysis?.summary || '',
+                            actionItems: analysis?.actionItems || [],
+                            draftEmail: analysis?.draftEmail || ''
                         },
                         update: {
-                            transcription
+                            transcription,
+                            summary: analysis?.summary || '',
+                            actionItems: analysis?.actionItems || [],
+                            draftEmail: analysis?.draftEmail || ''
                         }
                     }
                 }
