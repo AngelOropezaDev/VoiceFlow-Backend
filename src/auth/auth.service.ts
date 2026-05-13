@@ -9,7 +9,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async register(data: RegisterDto) {
     // 1. Verificar si el correo ya existe
@@ -68,5 +68,16 @@ export class AuthService {
         name: user.name,
       },
     };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
   }
 }

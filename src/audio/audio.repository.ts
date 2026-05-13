@@ -7,7 +7,15 @@ export class AudioRepository {
     constructor(private prisma: PrismaService) { }
 
     async newAudio(data: Prisma.AudioUncheckedCreateInput) {
-        await this.prisma.audio.create({ data })
+        return this.prisma.audio.create({ data });
+    }
+
+    async findAllByUserId(userId: string) {
+        return this.prisma.audio.findMany({
+            where: { userId },
+            include: { aiContent: true },
+            orderBy: { createdAt: 'desc' }
+        });
     }
 
     async findById(id: string) {
@@ -28,11 +36,12 @@ export class AudioRepository {
         });
     }
 
-    async updateTranscriptionAndStatus(id: string, transcription: string, analysis?: { summary: string, actionItems: string[], draftEmail: string }) {
+    async updateTranscriptionAndStatus(id: string, transcription: string, analysis?: { summary: string, actionItems: string[], draftEmail: string }, duration?: number) {
         return this.prisma.audio.update({
             where: { id },
             data: {
                 status: 'COMPLETED',
+                duration: duration,
                 aiContent: {
                     upsert: {
                         create: {

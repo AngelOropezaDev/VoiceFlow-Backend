@@ -29,10 +29,37 @@ export class AudioService {
             fileName: fileName
         }
 
-        await this.audioRepo.newAudio(data)
+        const audio = await this.audioRepo.newAudio(data)
 
         return {
+            id: audio.id,
             uploadUrl: newUrl,
+            storageKey: fileKey
+        };
+    }
+
+    async listByUserId(userId: string) {
+        return this.audioRepo.findAllByUserId(userId);
+    }
+
+    async uploadDirect(userId: string, file: any, duration?: number) {
+        const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || 'webm';
+        const fileKey = `users/${userId}/audios/${uuidv4()}.${fileExtension}`;
+
+        // Upload to R2 from backend
+        await this.s3Service.uploadFile(fileKey, file.buffer, file.mimetype);
+
+        const data = {
+            userId: userId,
+            storageKey: fileKey,
+            fileName: file.originalname || `voice_note_${Date.now()}.webm`,
+            duration: duration
+        }
+
+        const audio = await this.audioRepo.newAudio(data);
+
+        return {
+            id: audio.id,
             storageKey: fileKey
         };
     }
@@ -55,16 +82,13 @@ export class AudioService {
                              ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
             
             const duration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
-            if (duration) {
-                await this.audioRepo.updateDuration(audioId, duration);
-            }
-
+            
             const transcription = await this.transcriptionService.transcribeWithBuffer(audioBuffer, audio.storageKey);
             
             // Analyze transcription
             const analysis = await this.transcriptionService.analyzeTranscription(transcription);
 
-            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis);
+            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis, duration ?? undefined);
             return { success: true, transcription, duration, analysis };
         } catch (error: any) {
             this.logger.error(`Failed to process audio ${audioId}: ${error.message}`);

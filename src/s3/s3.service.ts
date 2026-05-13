@@ -49,4 +49,15 @@ export class S3Service {
             stream.on('end', () => resolve(Buffer.concat(chunks)));
         });
     }
+
+    async uploadFile(fileKey: string, buffer: Buffer, mimeType: string) {
+        const command = new PutObjectCommand({
+            Bucket: this.bucketName,
+            Key: fileKey,
+            ContentType: mimeType,
+            Body: buffer
+        });
+
+        return this.s3Client.send(command);
+    }
 }
