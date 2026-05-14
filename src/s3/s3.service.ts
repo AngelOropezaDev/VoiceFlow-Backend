@@ -41,12 +41,40 @@ export class S3Service {
 
         const response = await this.s3Client.send(command);
         const stream = response.Body as import('stream').Readable;
-        
+
         return new Promise((resolve, reject) => {
             const chunks: Buffer[] = [];
             stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
             stream.on('error', (err) => reject(err));
             stream.on('end', () => resolve(Buffer.concat(chunks)));
         });
+    }
+
+    async uploadFile(fileKey: string, buffer: Buffer, mimeType: string) {
+        const command = new PutObjectCommand({
+            Bucket: this.bucketName,
+            Key: fileKey,
+            ContentType: mimeType,
+            Body: buffer
+        });
+
+        return this.s3Client.send(command);
+    }
+
+    async readStream(fileKey: string, range?: string) {
+        const command = new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: fileKey,
+            Range: range
+        })
+
+        const response = await this.s3Client.send(command)
+
+        return {
+            stream: response.Body as import('stream').Readable,
+            contentLength: response.ContentLength,
+            contentRange: response.ContentRange,
+            acceptRanges: response.AcceptRanges,
+        };
     }
 }

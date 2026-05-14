@@ -10,7 +10,7 @@ export class AudioService {
     private readonly logger = new Logger(AudioService.name);
 
     constructor(
-        private s3Service: S3Service, 
+        private s3Service: S3Service,
         private audioRepo: AudioRepository,
         private transcriptionService: TranscriptionService,
         private audioMetadataService: AudioMetadataService
@@ -29,10 +29,37 @@ export class AudioService {
             fileName: fileName
         }
 
-        await this.audioRepo.newAudio(data)
+        const audio = await this.audioRepo.newAudio(data)
 
         return {
+            id: audio.id,
             uploadUrl: newUrl,
+            storageKey: fileKey
+        };
+    }
+
+    async listByUserId(userId: string, page: number = 1, limit: number = 9) {
+        return this.audioRepo.findAllByUserId(userId, page, limit);
+    }
+
+    async uploadDirect(userId: string, file: any, duration?: number) {
+        const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || 'webm';
+        const fileKey = `users/${userId}/audios/${uuidv4()}.${fileExtension}`;
+
+        // Upload to R2 from backend
+        await this.s3Service.uploadFile(fileKey, file.buffer, file.mimetype);
+
+        const data = {
+            userId: userId,
+            storageKey: fileKey,
+            fileName: file.originalname || `voice_note_${Date.now()}.webm`,
+            duration: duration
+        }
+
+        const audio = await this.audioRepo.newAudio(data);
+
+        return {
+            id: audio.id,
             storageKey: fileKey
         };
     }
@@ -45,26 +72,23 @@ export class AudioService {
 
         try {
             await this.audioRepo.updateStatus(audioId, 'PROCESSING');
-            
+
             const audioBuffer = await this.s3Service.getFileAsBuffer(audio.storageKey);
-            
+
             // Get duration and update
             const ext = audio.storageKey.split('.').pop()?.toLowerCase() || 'webm';
-            const mimeType = ext === 'mp3' ? 'audio/mpeg' : 
-                             ext === 'wav' ? 'audio/wav' : 
-                             ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
-            
+            const mimeType = ext === 'mp3' ? 'audio/mpeg' :
+                ext === 'wav' ? 'audio/wav' :
+                    ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
+
             const duration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
-            if (duration) {
-                await this.audioRepo.updateDuration(audioId, duration);
-            }
 
             const transcription = await this.transcriptionService.transcribeWithBuffer(audioBuffer, audio.storageKey);
-            
+
             // Analyze transcription
             const analysis = await this.transcriptionService.analyzeTranscription(transcription);
 
-            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis);
+            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis, duration ?? undefined);
             return { success: true, transcription, duration, analysis };
         } catch (error: any) {
             this.logger.error(`Failed to process audio ${audioId}: ${error.message}`);
@@ -72,4 +96,9 @@ export class AudioService {
             throw error;
         }
     }
+
+    async findById(id: string) {
+        return await this.audioRepo.findByIdDetailed(id)
+    }
+
 }

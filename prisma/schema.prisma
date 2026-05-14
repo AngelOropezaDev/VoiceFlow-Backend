@@ -71,6 +71,7 @@ model Audio {
   id         String      @id @default(uuid()) @db.Uuid
   userId     String      @db.Uuid
   storageKey String // key del objeto en Cloudflare R2
+  title      String?
   status     AudioStatus @default(PENDING)
   duration   Float? // duración en segundos
   fileName   String? // nombre original del archivo
