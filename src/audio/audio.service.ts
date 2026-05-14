@@ -10,7 +10,7 @@ export class AudioService {
     private readonly logger = new Logger(AudioService.name);
 
     constructor(
-        private s3Service: S3Service, 
+        private s3Service: S3Service,
         private audioRepo: AudioRepository,
         private transcriptionService: TranscriptionService,
         private audioMetadataService: AudioMetadataService
@@ -38,8 +38,8 @@ export class AudioService {
         };
     }
 
-    async listByUserId(userId: string) {
-        return this.audioRepo.findAllByUserId(userId);
+    async listByUserId(userId: string, page: number = 1, limit: number = 9) {
+        return this.audioRepo.findAllByUserId(userId, page, limit);
     }
 
     async uploadDirect(userId: string, file: any, duration?: number) {
@@ -72,19 +72,19 @@ export class AudioService {
 
         try {
             await this.audioRepo.updateStatus(audioId, 'PROCESSING');
-            
+
             const audioBuffer = await this.s3Service.getFileAsBuffer(audio.storageKey);
-            
+
             // Get duration and update
             const ext = audio.storageKey.split('.').pop()?.toLowerCase() || 'webm';
-            const mimeType = ext === 'mp3' ? 'audio/mpeg' : 
-                             ext === 'wav' ? 'audio/wav' : 
-                             ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
-            
+            const mimeType = ext === 'mp3' ? 'audio/mpeg' :
+                ext === 'wav' ? 'audio/wav' :
+                    ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
+
             const duration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
-            
+
             const transcription = await this.transcriptionService.transcribeWithBuffer(audioBuffer, audio.storageKey);
-            
+
             // Analyze transcription
             const analysis = await this.transcriptionService.analyzeTranscription(transcription);
 
@@ -96,4 +96,9 @@ export class AudioService {
             throw error;
         }
     }
+
+    async findById(id: string) {
+        return await this.audioRepo.findByIdDetailed(id)
+    }
+
 }
