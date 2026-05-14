@@ -101,4 +101,8 @@ export class AudioService {
         return await this.audioRepo.findByIdDetailed(id)
     }
 
+    async updateTask(audioId: string, userId: string) {
+
+    }
+
 }
