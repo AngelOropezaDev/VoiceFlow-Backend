@@ -4,6 +4,7 @@ export const actionItemSchema = z.object({
   id: z.string(),
   text: z.string().min(1, 'El texto de la tarea no puede estar vacío'),
   completed: z.boolean(),
+  priority: z.enum(['Alta', 'Media', 'Baja']).optional(),
 });
 
 export const updateTasksSchema = z.object({

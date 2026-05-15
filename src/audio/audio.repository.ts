@@ -76,7 +76,12 @@ export class AudioRepository {
         });
     }
 
-    async updateTranscriptionAndStatus(id: string, transcription: string, analysis?: { title?: string, summary: string, actionItems: string[], draftEmail: string }, duration?: number) {
+    async updateTranscriptionAndStatus(
+        id: string, 
+        transcription: string, 
+        analysis?: { title?: string, summary: string, actionItems: any[], draftEmail: string }, 
+        duration?: number
+    ) {
         return this.prisma.audio.update({
             where: { id },
             data: {

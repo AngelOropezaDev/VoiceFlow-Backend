@@ -5,6 +5,7 @@ export interface IActionItem {
   id: string;
   text: string;
   completed: boolean;
+  priority?: 'Alta' | 'Media' | 'Baja';
 }
 
 /**

@@ -27,7 +27,7 @@ export class TranscriptionService {
 
     async transcribeWithBuffer(audioBuffer: Buffer, audioKey: string): Promise<string> {
         try {
-            const model = this.genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+            const model = this.genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
             const prompt = 'Extract only the speech-to-text transcription from this audio. Do not add any conversational filler, explanations, or introductory remarks. Just the spoken words.';
 
@@ -55,29 +55,39 @@ export class TranscriptionService {
     async analyzeTranscription(text: string) {
         try {
             const model = this.genAI.getGenerativeModel({
-                model: "gemini-flash-latest",
+                model: "gemini-3.1-flash-lite",
                 generationConfig: {
                     responseMimeType: "application/json",
                 }
             });
 
-            const prompt = `Analiza la transcripción proporcionada. Genera un título corto y descriptivo (máximo 6 palabras), un resumen de una sola frase, identifica una lista de tareas concretas (action items) y redacta un borrador de correo electrónico. Si la nota es una reunión o acuerdo, el correo debe ser de seguimiento; si es personal, debe ser un recordatorio estructurado para uno mismo.
-
-Transcripción: "${text}"
-
-Formato de salida (JSON):
+            const prompt = `Analiza: "${text}".
+Responde JSON:
 {
-  "title": "string",
-  "summary": "string",
-  "actionItems": ["string"],
-  "draftEmail": "string"
-}`;
+  "title": "Título max 6 palabras",
+  "summary": "Resumen en una frase",
+  "actionItems": [{
+    "text": "descripción", 
+    "priority": "Alta|Media|Baja"
+  }],
+  "draftEmail": "Borrador de seguimiento"
+}
+
+Criterios de prioridad (SÉ MUY ESTRICTO):
+- Alta: Acciones críticas, compromisos con fechas (hoy/mañana), o bloqueadores de proyecto.
+- Media: Seguimientos importantes, tareas con fechas próximas (esta semana).
+- Baja: Tareas rutinarias, registros de actividad, actualizaciones de estado, recordatorios menores o planes futuros sin fecha. (Por defecto, si no hay urgencia clara, usa Baja).`;
 
             const result = await model.generateContent(prompt);
             const response = await result.response;
             const content = JSON.parse(response.text());
 
-            return content as { title: string; summary: string; actionItems: string[]; draftEmail: string };
+            return content as { 
+                title: string; 
+                summary: string; 
+                actionItems: { text: string; priority: 'Alta' | 'Media' | 'Baja' }[]; 
+                draftEmail: string 
+            };
         } catch (error: any) {
             this.logger.error(`Error analyzing transcription: ${error.message}`);
             throw error;

@@ -94,13 +94,26 @@ export class AudioService {
             // Analyze transcription
             const analysis = await this.transcriptionService.analyzeTranscription(transcription);
 
-            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis, finalDuration ?? undefined);
+            // Map simple action items to full objects with ID and completed status
+            const mappedActionItems: IActionItem[] = analysis.actionItems.map(item => ({
+                id: uuidv4(),
+                text: item.text,
+                priority: item.priority,
+                completed: false
+            }));
+
+            await this.audioRepo.updateTranscriptionAndStatus(
+                audioId, 
+                transcription, 
+                { ...analysis, actionItems: mappedActionItems }, 
+                finalDuration ?? undefined
+            );
 
             if (finalDuration) {
                 await this.authRepo.increaseUsedMinutes(audio.userId, Math.round(finalDuration))
             }
 
-            return { success: true, transcription, finalDuration, analysis };
+            return { success: true, transcription, finalDuration, analysis: { ...analysis, actionItems: mappedActionItems } };
         } catch (error: any) {
             this.logger.error(`Failed to process audio ${audioId}: ${error.message}`);
             await this.audioRepo.updateStatus(audioId, 'FAILED');
