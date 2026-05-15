@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { S3Service } from 'src/s3/s3.service';
 import { v4 as uuidv4 } from 'uuid'
 import { AudioRepository } from './audio.repository';
 import { TranscriptionService } from '../transcription/transcription.service';
 import { AudioMetadataService } from './audio-metadata.service';
+import { IActionItem } from './interfaces/action-item.interface';
 
 @Injectable()
 export class AudioService {
@@ -101,8 +102,19 @@ export class AudioService {
         return await this.audioRepo.findByIdDetailed(id)
     }
 
-    async updateTask(audioId: string, userId: string) {
+    async updateTask(audioId: string, userId: string, tasks: IActionItem[]) {
+        try {
+            const updatedAudio = this.audioRepo.updateTask(audioId, userId, tasks)
 
+            return updatedAudio
+        } catch (error) {
+            if (error.code === 'P2025') {
+                throw new NotFoundException(`Audio not found or you don't have permission to edit it`);
+            }
+
+
+            throw new InternalServerErrorException('Error updating tasks');
+        }
     }
 
 }

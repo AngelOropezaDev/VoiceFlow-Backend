@@ -7,6 +7,7 @@ import { ZodValidationPipe } from 'src/common/pipes/zod-validation.pipe';
 import { uploadAudioSchema } from './dto/audio.schema';
 import type { UploadAudioDto } from './dto/audio.schema';
 import { S3Service } from 'src/s3/s3.service';
+import * as updateTasksDto from './dto/update-tasks.dto';
 
 @Controller('audio')
 export class AudioController {
@@ -86,7 +87,7 @@ export class AudioController {
       const { stream, contentLength, contentRange } = await this.s3Service.readStream(audio.storageKey, rangeHeader);
 
       const statusCode = rangeHeader ? 206 : 200;
-      
+
       const headers: any = {
         'Content-Type': 'audio/webm',
         'Content-Disposition': `inline; filename="${audio.fileName}"`,
@@ -97,7 +98,7 @@ export class AudioController {
       if (contentRange) headers['Content-Range'] = contentRange;
 
       res.writeHead(statusCode, headers);
-      
+
       stream.pipe(res);
 
       stream.on('error', (err) => {
@@ -111,5 +112,13 @@ export class AudioController {
       console.error('S3 error:', error);
       throw new NotFoundException('No se pudo encontrar el archivo en el storage');
     }
+  }
+
+  @Patch(':id/tasks')
+  @UseGuards(JwtAuthGuard)
+  @UsePipes(new ZodValidationPipe(updateTasksDto.updateTasksSchema))
+  async updateTask(@Param("id") id: string, @Req() req: any, @Body() data: updateTasksDto.UpdateTasksDto) {
+    const userId = req.user.id
+    return this.audioService.updateTask(id, userId, data.tasks)
   }
 }
