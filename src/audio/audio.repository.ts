@@ -112,4 +112,14 @@ export class AudioRepository {
             data: { aiContent: { update: { actionItems: tasks as unknown as Prisma.InputJsonValue } } }
         })
     }
+
+    async updateTitle(id: string, userId: string, title: string) {
+        return this.prisma.audio.update({
+            where: {
+                id,
+                userId
+            },
+            data: { title }
+        })
+    }
 }

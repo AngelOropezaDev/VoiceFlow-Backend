@@ -36,6 +36,12 @@ enum IntegrationStatus {
   FAILED
 }
 
+enum PlanType {
+  FREE
+  STARTER
+  PRO
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -43,11 +49,13 @@ enum IntegrationStatus {
 /// Usuario principal del sistema.
 /// Centraliza auth, créditos, y tokens OAuth para integraciones.
 model User {
-  id       String  @id @default(uuid()) @db.Uuid
-  email    String  @unique
-  password String // hash bcrypt/argon2
-  name     String?
-  credits  Int     @default(10) // créditos iniciales de cortesía
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  password      String // hash bcrypt/argon2
+  name          String?
+  plan          PlanType @default(FREE)
+  minutesUsed   Int      @default(0)
+  lastResetDate DateTime @default(now())
 
   // --- OAuth Tokens (almacenados como texto cifrado) ---
   googleAccessToken  String? @db.Text

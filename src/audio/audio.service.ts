@@ -5,6 +5,8 @@ import { AudioRepository } from './audio.repository';
 import { TranscriptionService } from '../transcription/transcription.service';
 import { AudioMetadataService } from './audio-metadata.service';
 import { IActionItem } from './interfaces/action-item.interface';
+import { parseBuffer } from 'music-metadata';
+import { AuthRepository } from 'src/auth/auth.repository';
 
 @Injectable()
 export class AudioService {
@@ -14,7 +16,8 @@ export class AudioService {
         private s3Service: S3Service,
         private audioRepo: AudioRepository,
         private transcriptionService: TranscriptionService,
-        private audioMetadataService: AudioMetadataService
+        private audioMetadataService: AudioMetadataService,
+        private authRepo: AuthRepository
     ) { }
 
     async initUpload(userId: string, fileName: string) {
@@ -46,6 +49,7 @@ export class AudioService {
     async uploadDirect(userId: string, file: any, duration?: number) {
         const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || 'webm';
         const fileKey = `users/${userId}/audios/${uuidv4()}.${fileExtension}`;
+
 
         // Upload to R2 from backend
         await this.s3Service.uploadFile(fileKey, file.buffer, file.mimetype);
@@ -82,15 +86,21 @@ export class AudioService {
                 ext === 'wav' ? 'audio/wav' :
                     ext === 'm4a' ? 'audio/m4a' : 'audio/webm';
 
-            const duration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
+            const metadataDuration = await this.audioMetadataService.getDuration(audioBuffer, mimeType);
+            const finalDuration = metadataDuration ?? audio.duration;
 
             const transcription = await this.transcriptionService.transcribeWithBuffer(audioBuffer, audio.storageKey);
 
             // Analyze transcription
             const analysis = await this.transcriptionService.analyzeTranscription(transcription);
 
-            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis, duration ?? undefined);
-            return { success: true, transcription, duration, analysis };
+            await this.audioRepo.updateTranscriptionAndStatus(audioId, transcription, analysis, finalDuration ?? undefined);
+
+            if (finalDuration) {
+                await this.authRepo.increaseUsedMinutes(audio.userId, Math.round(finalDuration))
+            }
+
+            return { success: true, transcription, finalDuration, analysis };
         } catch (error: any) {
             this.logger.error(`Failed to process audio ${audioId}: ${error.message}`);
             await this.audioRepo.updateStatus(audioId, 'FAILED');
@@ -104,7 +114,7 @@ export class AudioService {
 
     async updateTask(audioId: string, userId: string, tasks: IActionItem[]) {
         try {
-            const updatedAudio = this.audioRepo.updateTask(audioId, userId, tasks)
+            const updatedAudio = await this.audioRepo.updateTask(audioId, userId, tasks)
 
             return updatedAudio
         } catch (error) {
@@ -117,4 +127,15 @@ export class AudioService {
         }
     }
 
+    async updateTitle(audioId: string, userId: string, title: string) {
+        try {
+            const updatedAudio = await this.audioRepo.updateTitle(audioId, userId, title);
+            return updatedAudio;
+        } catch (error) {
+            if (error.code === 'P2025') {
+                throw new NotFoundException(`Audio not found or you don't have permission to edit it`);
+            }
+            throw new InternalServerErrorException('Error updating title');
+        }
+    }
 }
