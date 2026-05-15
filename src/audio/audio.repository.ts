@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma, AudioStatus } from "@prisma/client";
+import { IActionItem } from "./interfaces/action-item.interface";
 
 @Injectable()
 export class AudioRepository {
@@ -26,7 +27,8 @@ export class AudioRepository {
                     createdAt: true,
                     aiContent: {
                         select: {
-                            summary: true
+                            summary: true,
+                            actionItems: true
                         }
                     }
                 },
@@ -38,7 +40,8 @@ export class AudioRepository {
         return {
             data: data.map(audio => ({
                 ...audio,
-                summary: audio.aiContent?.summary || ''
+                summary: audio.aiContent?.summary || '',
+                tasks: audio.aiContent?.actionItems || []
             })),
             meta: {
                 total,
@@ -73,7 +76,12 @@ export class AudioRepository {
         });
     }
 
-    async updateTranscriptionAndStatus(id: string, transcription: string, analysis?: { title?: string, summary: string, actionItems: string[], draftEmail: string }, duration?: number) {
+    async updateTranscriptionAndStatus(
+        id: string, 
+        transcription: string, 
+        analysis?: { title?: string, summary: string, actionItems: any[], draftEmail: string }, 
+        duration?: number
+    ) {
         return this.prisma.audio.update({
             where: { id },
             data: {
@@ -98,5 +106,25 @@ export class AudioRepository {
                 }
             }
         });
+    }
+
+    async updateTask(id: string, userId: string, tasks: IActionItem[]) {
+        return this.prisma.audio.update({
+            where: {
+                id,
+                userId
+            },
+            data: { aiContent: { update: { actionItems: tasks as unknown as Prisma.InputJsonValue } } }
+        })
+    }
+
+    async updateTitle(id: string, userId: string, title: string) {
+        return this.prisma.audio.update({
+            where: {
+                id,
+                userId
+            },
+            data: { title }
+        })
     }
 }

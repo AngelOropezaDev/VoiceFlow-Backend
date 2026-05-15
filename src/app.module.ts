@@ -6,9 +6,10 @@ import { S3Module } from './s3/s3.module';
 import { AudioModule } from './audio/audio.module';
 import { AuthModule } from './auth/auth.module';
 import { TranscriptionModule } from './transcription/transcription.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [PrismaModule, S3Module, AudioModule, AuthModule, TranscriptionModule],
+  imports: [PrismaModule, S3Module, AudioModule, AuthModule, TranscriptionModule, UsersModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -7,6 +7,8 @@ import { ZodValidationPipe } from 'src/common/pipes/zod-validation.pipe';
 import { uploadAudioSchema } from './dto/audio.schema';
 import type { UploadAudioDto } from './dto/audio.schema';
 import { S3Service } from 'src/s3/s3.service';
+import * as updateTasksDto from './dto/update-tasks.dto';
+import { QuotaGuard } from './guards/quota.guard';
 
 @Controller('audio')
 export class AudioController {
@@ -38,7 +40,7 @@ export class AudioController {
   }
 
   @Post('upload-url')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, QuotaGuard)
   @UsePipes(new ZodValidationPipe(uploadAudioSchema))
   async getUploadUrl(@Body() body: UploadAudioDto, @Req() req: any) {
     const userId = req.user.id;
@@ -47,7 +49,7 @@ export class AudioController {
   }
 
   @Post('upload')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, QuotaGuard)
   @UseInterceptors(FileInterceptor('file'))
   async upload(@UploadedFile() file: any, @Req() req: any, @Body('duration') duration?: string) {
     if (!file) {
@@ -59,7 +61,7 @@ export class AudioController {
   }
 
   @Patch(':id/process')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, QuotaGuard)
   async processAudio(@Param('id') id: string) {
     return this.audioService.processAudio(id);
   }
@@ -86,7 +88,7 @@ export class AudioController {
       const { stream, contentLength, contentRange } = await this.s3Service.readStream(audio.storageKey, rangeHeader);
 
       const statusCode = rangeHeader ? 206 : 200;
-      
+
       const headers: any = {
         'Content-Type': 'audio/webm',
         'Content-Disposition': `inline; filename="${audio.fileName}"`,
@@ -97,7 +99,7 @@ export class AudioController {
       if (contentRange) headers['Content-Range'] = contentRange;
 
       res.writeHead(statusCode, headers);
-      
+
       stream.pipe(res);
 
       stream.on('error', (err) => {
@@ -111,5 +113,23 @@ export class AudioController {
       console.error('S3 error:', error);
       throw new NotFoundException('No se pudo encontrar el archivo en el storage');
     }
+  }
+
+  @Patch(':id/tasks')
+  @UseGuards(JwtAuthGuard)
+  @UsePipes(new ZodValidationPipe(updateTasksDto.updateTasksSchema))
+  async updateTask(@Param("id") id: string, @Req() req: any, @Body() data: updateTasksDto.UpdateTasksDto) {
+    const userId = req.user.id
+    return this.audioService.updateTask(id, userId, data.tasks)
+  }
+
+  @Patch(':id/title')
+  @UseGuards(JwtAuthGuard)
+  async updateTitle(@Param("id") id: string, @Req() req: any, @Body('title') title: string) {
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      throw new ForbiddenException('El título no puede estar vacío');
+    }
+    const userId = req.user.id;
+    return this.audioService.updateTitle(id, userId, title);
   }
 }

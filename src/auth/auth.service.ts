@@ -1,21 +1,19 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto, LoginDto } from './dto/auth.schema';
+import { AuthRepository } from './auth.repository';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
   ) { }
 
   async register(data: RegisterDto) {
     // 1. Verificar si el correo ya existe
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: data.email },
-    });
+    const existingUser = await this.authRepository.findByEmail(data.email);
 
     if (existingUser) {
       throw new ConflictException('El correo ya está registrado');
@@ -26,12 +24,10 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(data.password, saltRounds);
 
     // 3. Crear el usuario
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        password: hashedPassword,
-        name: data.name,
-      },
+    const user = await this.authRepository.createUser({
+      email: data.email,
+      password: hashedPassword,
+      name: data.name,
     });
 
     // 4. Retornar sin la contraseña
@@ -41,9 +37,7 @@ export class AuthService {
 
   async login(data: LoginDto) {
     // 1. Buscar al usuario
-    const user = await this.prisma.user.findUnique({
-      where: { email: data.email },
-    });
+    const user = await this.authRepository.findByEmail(data.email);
 
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
@@ -71,9 +65,7 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.authRepository.findById(userId);
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
     }
